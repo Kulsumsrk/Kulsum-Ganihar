@@ -3,7 +3,9 @@ name: CDK Deploy Pipeline
 on:
   push:
     branches:
-      - main  # Change this based on your deployment strategy
+      - master  # Change this based on your deployment strategy
+
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 jobs:
   deploy:
