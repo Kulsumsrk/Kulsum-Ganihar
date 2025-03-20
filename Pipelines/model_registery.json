@@ -1,0 +1,87 @@
+{
+  "Version": "2020-12-01",
+  "Metadata": {
+    "PipelineDescription": "Pipeline for registering a model package"
+  },
+  "Parameters": [
+    {
+      "Name": "ModelPackageGroupName",
+      "Type": "String",
+      "DefaultValue": "airline-customer-segmentation"
+    },
+    {
+      "Name": "ImageUri",
+      "Type": "String",
+      "DefaultValue": "474532148129.dkr.ecr.eu-west-1.amazonaws.com/delta/airline_customer_segmentation:inference-latest"
+    },
+    {
+      "Name": "ModelDataUrl",
+      "Type": "String",
+      "DefaultValue": "s3://airline-customer-segmentation/output/train/pipelines-z19bhzuj7mfk-TrainXgboostModel-IeuXKhmu3h/output/model.tar.gz"
+    },
+    {
+      "Name": "InstanceType",
+      "Type": "String",
+      "DefaultValue": "ml.m5.large"
+    },
+    {
+      "Name": "InstanceCount",
+      "Type": "Integer",
+      "DefaultValue": 1
+    },
+    {
+      "Name": "ContentTypes",
+      "Type": "String",
+      "DefaultValue": "application/json"
+    },
+    {
+      "Name": "ResponseTypes",
+      "Type": "String",
+      "DefaultValue": "application/json"
+    }
+  ],
+  "Steps": [
+    {
+      "Name": "RegisterModel",
+      "Type": "RegisterModel",
+      "Arguments": {
+        "InferenceSpecification": {
+          "Containers": [
+            {
+              "Image": {
+                "Get": "Parameters.ImageUri"
+              },
+              "ModelDataUrl": {
+                "Get": "Parameters.ModelDataUrl"
+              }
+            }
+          ],
+          "SupportedContentTypes": [
+            {
+              "Get": "Parameters.ContentTypes"
+            }
+          ],
+          "SupportedTransformInstanceTypes": [
+            {
+              "Get": "Parameters.InstanceType"
+            }
+          ],
+          "SupportedRealtimeInferenceInstanceTypes": [
+            {
+              "Get": "Parameters.InstanceType"
+            }
+          ],
+          "SupportedResponseMIMETypes": [
+            {
+              "Get": "Parameters.ResponseTypes"
+            }
+          ]
+        },
+        "ModelPackageGroupName": {
+          "Get": "Parameters.ModelPackageGroupName"
+        },
+        "ModelApprovalStatus": "PendingManualApproval"
+      }
+    }
+  ]
+}
