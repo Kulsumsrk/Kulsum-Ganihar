@@ -6,7 +6,8 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_iam as iam,
     custom_resources as cr,
-    Duration
+    Duration,
+    aws_s3 as s3
 )
 import json
 from constructs import Construct
@@ -162,94 +163,43 @@ class JupiterSpaceInStudioWithGitTemplate(ProductStack):
 
         sagemaker_space.add_dependency(lifecycle_config)
 
-        # Create a Lambda Layer with boto3 and cfnresponse
-        # lambda_layer = _lambda.LayerVersion(
-        #     self,
-        #     "LambdaLayer",
-        #     code=_lambda.Code.from_asset("libs/boto3/boto3.zip"),
-        #     compatible_runtimes=[_lambda.Runtime.PYTHON_3_9],
-        #     description="Layer containing boto3 and cfnresponse"
+        # lambda_payload = {
+        #     "DomainId": parameters["DomainId"],
+        #     "LifecycleConfigArn": lifecycle_config.attr_studio_lifecycle_config_arn
+        # }
+        #
+        # # Custom Resource to invoke Lambda
+        # update_domain_custom_resource = cr.AwsCustomResource(
+        #     self, "UpdateSageMakerDomain",
+        #     policy=cr.AwsCustomResourcePolicy.from_statements([
+        #         iam.PolicyStatement(
+        #             actions=["lambda:InvokeFunction"],
+        #             resources=[lambda_function.function_arn]
+        #         )
+        #     ]),
+        #     on_create=cr.AwsSdkCall(
+        #         service="Lambda",
+        #         action="invoke",
+        #         parameters={
+        #             "FunctionName": lambda_function.function_name,
+        #             "InvocationType": "Event",
+        #             "Payload": json.dumps(lambda_payload)
+        #         },
+        #         physical_resource_id=cr.PhysicalResourceId.of("UpdateSageMakerDomainOnCreate")
+        #     ),
+        #     on_update=cr.AwsSdkCall(
+        #         service="Lambda",
+        #         action="invoke",
+        #         parameters={
+        #             "FunctionName": lambda_function.function_name,
+        #             "InvocationType": "Event",
+        #             "Payload": json.dumps(lambda_payload)
+        #         },
+        #         physical_resource_id=cr.PhysicalResourceId.of("UpdateSageMakerDomainOnUpdate")
+        #     )
         # )
-
-        lambda_role = iam.Role(
-            self,
-            "SageMakerUpdateLambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole")
-            ]
-        )
-
-        # **Attach inline policy for SageMaker permissions**
-        lambda_role.add_to_policy(iam.PolicyStatement(
-            actions=[
-                "sagemaker:UpdateDomain",
-                "sagemaker:DescribeDomain",
-                "sagemaker:ListDomains"
-            ],
-            resources=["*"]  # You can restrict this to specific domain ARNs
-        ))
-
-        # **Attach CloudWatch Logs permissions**
-        lambda_role.add_to_policy(iam.PolicyStatement(
-            actions=[
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ],
-            resources=["arn:aws:logs:*:*:*"]
-        ))
-
-        # Pass domain_id and lifecycle_config_arn as environment variables
-        lambda_function = _lambda.Function(
-            self, "SageMakerDomainUpdateLambda",
-            runtime=_lambda.Runtime.PYTHON_3_9,
-            handler="UpdateSagemakerDomain.lambda_handler",
-            code=_lambda.Code.from_asset("cdk/Lambda"),  # Folder containing the lambda script
-            timeout=Duration.seconds(60),
-            memory_size=256,
-            role=lambda_role
-            # layers=[lambda_layer]
-        )
-
-        lambda_payload = {
-            "DomainId": parameters["DomainId"],
-            "LifecycleConfigArn": lifecycle_config.attr_studio_lifecycle_config_arn
-        }
-
-        # Custom Resource to invoke Lambda
-        update_domain_custom_resource = cr.AwsCustomResource(
-            self, "UpdateSageMakerDomain",
-            policy=cr.AwsCustomResourcePolicy.from_statements([
-                iam.PolicyStatement(
-                    actions=["lambda:InvokeFunction"],
-                    resources=[lambda_function.function_arn]
-                )
-            ]),
-            on_create=cr.AwsSdkCall(
-                service="Lambda",
-                action="invoke",
-                parameters={
-                    "FunctionName": lambda_function.function_name,
-                    "InvocationType": "Event",
-                    "Payload": json.dumps(lambda_payload)
-                },
-                physical_resource_id=cr.PhysicalResourceId.of("UpdateSageMakerDomainOnCreate")
-            ),
-            on_update=cr.AwsSdkCall(
-                service="Lambda",
-                action="invoke",
-                parameters={
-                    "FunctionName": lambda_function.function_name,
-                    "InvocationType": "Event",
-                    "Payload": json.dumps(lambda_payload)
-                },
-                physical_resource_id=cr.PhysicalResourceId.of("UpdateSageMakerDomainOnUpdate")
-            )
-        )
-
-        # Outputs
-        CfnOutput(self, "UpdateDomainLambdaArn", value=lambda_function.function_arn)
-        CfnOutput(self, "UpdateDomainCustomResource", value=update_domain_custom_resource.node.path)
+        #
+        # # Outputs
+        # CfnOutput(self, "UpdateDomainLambdaArn", value=lambda_function.function_arn)
+        # CfnOutput(self, "UpdateDomainCustomResource", value=update_domain_custom_resource.node.path)
         CfnOutput(self, "SageMakerJupyterSpaceName", value=sagemaker_space.space_name)

@@ -9,7 +9,7 @@ from cdk.CloudFormation.CreateCodeBuildProject import DeltaCodeBuildProject
 from cdk.CloudFormation.CreateSagemakerPipeline import SageMakerPipelineTemplate
 from cdk.CloudFormation.JupiterSpaceInStudioWithGitTemplate import JupiterSpaceInStudioWithGitTemplate
 from cdk.CloudFormation.InvokeSagemakerPipeline import SageMakerPipelineInvokerStack
-
+from cdk.CodePipeline.CICDCodePipeline import CICDPipelineStack
 app = App()
 env = Environment(account="474532148129", region="eu-west-1")
 
@@ -58,9 +58,9 @@ product_templates_stack = ProductTemplates(app, "ProductTemplates", env=env)
 ecr_repo_product_stack = DeltaECRRepository(product_templates_stack, "DeltaECRRepo")
 codecommit_repo_product_stack = DeltaCodeCommitRepo(product_templates_stack, "DeltaCodeCommitRepo")
 codebuild_project_product_stack = DeltaCodeBuildProject(product_templates_stack, "DeltaCodeBuildProject",
-                                                        repository=codecommit_repo_product_stack.repository)"""
+                                                        repository=codecommit_repo_product_stack.repository)
 jupiter_space_setup_product_stack = JupiterSpaceInStudioWithGitTemplate(product_templates_stack,
-                                                                        "JupiterSpaceInStudioProduct")
+                                                                        "JupiterSpaceInStudioProduct")"""
 """
 # =====================================================================
 # Create portfolios.
@@ -189,7 +189,7 @@ ServiceCatalogProductFactory(
     description="CodeBuild Project provisioning Product",
     support_email="Syeda.Ganihgar@xebia.com",
     support_url="https://aws.amazon.com/servicecatalog/"
-)"""
+)
 
 #  Provision a product that creates new SageMaker Studio user profile (a "Jupiter Space") and its associated lifecycle
 #  configuration with Git initialization.
@@ -208,26 +208,28 @@ ServiceCatalogProductFactory(
     description="Jupiter Space provisioning Product",
     support_email="Syeda.Ganihgar@xebia.com",
     support_url="https://aws.amazon.com/servicecatalog/"
-)
+)"""
 
 # Load pipeline parameters from config file
-CONFIG_FILE = "pipeline-config.json"
-if os.path.exists(CONFIG_FILE):
-    with open(CONFIG_FILE, "r") as f:
-        config_data = json.load(f)
-    pipeline_parameters = json.dumps(config_data.get("PipelineParameters", {}))  # Convert to JSON string
-else:
-    pipeline_parameters = "{}"  # Default empty JSON string
+# CONFIG_FILE = "pipeline-config.json"
+# if os.path.exists(CONFIG_FILE):
+#     with open(CONFIG_FILE, "r") as f:
+#         config_data = json.load(f)
+#     pipeline_parameters = json.dumps(config_data.get("PipelineParameters", {}))  # Convert to JSON string
+# else:
+#     pipeline_parameters = "{}"  # Default empty JSON string
+#
+# app = App()
+#
+# # Read PipelineName from environment variables (passed from Git pipeline)
+# pipeline_name = app.node.try_get_context("PipelineName")
+#
+# # Deploy stack
+# SageMakerPipelineInvokerStack(
+#     app, "SageMakerPipelineInvokerStack",
+#     pipeline_name=pipeline_name,
+#     pipeline_parameters=pipeline_parameters
+# )
 
-app = App()
-
-# Read PipelineName from environment variables (passed from Git pipeline)
-pipeline_name = app.node.try_get_context("PipelineName")
-
-# Deploy stack
-SageMakerPipelineInvokerStack(
-    app, "SageMakerPipelineInvokerStack",
-    pipeline_name=pipeline_name,
-    pipeline_parameters=pipeline_parameters
-)
+CICDPipelineStack(app, "MyCICDPipeline")
 app.synth()

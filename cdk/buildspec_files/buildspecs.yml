@@ -1,0 +1,89 @@
+version: 0.2
+
+env:
+  variables:
+    PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
+    AWS_CLI_IMAGE: "nexus-docker.enterprise-tools.aws.delta.com/com/delta/etdeta/ete-runner-image:latest"
+    AWS_DEFAULT_REGION: us-east-1
+    AWS_SESSION_NAME: gitlab-ci
+    ORIGINAL_AWS_ACCESS_KEY: $AWS_ACCESS_KEY_ID
+    ORIGINAL_AWS_SECRET_KEY: $AWS_SECRET_ACCESS_KEY
+    ORIGINAL_AWS_SESSION_TOKEN: $AWS_SESSION_TOKEN
+
+cache:
+  paths:
+    - .cache/pip
+
+phases:
+  install:
+    runtime-versions:
+      python: latest
+      nodejs: latest
+    commands:
+      - echo "Setting up the environment..."
+      - python3 -m venv ../mlops_deployer/venv
+      - source ../mlops_deployer/venv/bin/activate
+      - python3 -m pip install pip==24.2.0
+      - pip install -r requirements.txt
+      - npm install -g aws-cdk
+      - python -m pip install awscli
+      - yum install -y zip jq
+
+  pre_build:
+    commands:
+      - echo "Running pre-build steps..."
+      - echo "Starting Veracode scanning"
+      - curl -fsS https://tools.veracode.com/veracode-cli/install | sh
+      - veracode_creds=$(aws ssm get-parameter --name /mlops/tooling/veracode --with-decryption --query "Parameter.Value" --output text)
+      - export VERACODE_API_KEY_ID=$(echo $veracode_creds | jq -r '.veracode_api_key_id')
+      - export VERACODE_API_KEY_SECRET=$(echo $veracode_creds | jq -r '.veracode_api_key_secret')
+      - zip -r veracode-pack-mlops-launchpad-products.zip . -i '*.py' 'Pipfile.lock'
+      - ./veracode static scan veracode-pack-mlops-launchpad-products.zip --fail-on-severity "Very High, High"
+
+  build:
+    commands:
+      - echo "Running lint checks..."
+      - echo $CI_COMMIT_REF_NAME
+      - which black
+      - python -m black . --check --verbose --diff --color
+      - echo "Linting complete. No issues found."
+  
+  post_build:
+    commands:
+      - echo "Parsing deployment variables..."
+      - |
+        if [[ $TARGET_ENV == "dev" ]]; then
+          TARGET_ACCOUNT_ID=${CDK_DEV_ACCOUNT}
+        else
+          echo "Mismatch in Deployment Expectations - Development Product will be deployed only to Dev Spoke Account"
+          exit 1
+        fi
+
+      - echo "Retrieving Git credentials..."
+      - |
+        SECRET_STRING=$(aws secretsmanager get-secret-value --secret-id gitlab_deploy_token --query SecretString --output text)
+        export GIT_USER=$(echo $SECRET_STRING | jq -r '.user')
+        export GIT_PASS=$(echo $SECRET_STRING | jq -r '.pass')
+
+      - echo "Assuming AWS Role..."
+      - |
+        export DEPLOY_ROLE="arn:aws:iam::${AWS_ACC_NUMBER}:role/${SPOKE_ROLE_NAME}"
+        export $(aws sts assume-role \
+          --role-arn "$DEPLOY_ROLE" \
+          --role-session-name $AWS_SESSION_NAME \
+          --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
+          --output text)
+        export ASSUMED_ROLE_ACCOUNT=$(aws sts get-caller-identity --output text --query Account)
+        echo "Switched to account: $ASSUMED_ROLE_ACCOUNT"
+
+      - echo "Installing additional dependencies..."
+      - pip install -r ./mlops_development_product/requirements.txt
+
+      - echo "Deploying CDK Application..."
+      - source ./mlops_development_product/cdk_deploy.sh
+
+      - echo "Deployment completed."
+
+artifacts:
+  files:
+    - '**/*'
